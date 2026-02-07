@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button"
 import { Mic, MicOff, Video, VideoOff } from "lucide-react"
 import { FaceNotification } from "@/components/face-notification"
 import { useFaceDetection } from "@/hooks/use-face-detection"
-import { RayBanOverlay } from "@/components/rayban-overlay"
 import { cn } from "@/lib/utils"
 import {
   calculateVideoTransform,
@@ -35,7 +34,6 @@ export default function WebcamStream() {
   const [activeSpeaker, setActiveSpeaker] = useState<PersonData | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [eventSource, setEventSource] = useState<EventSource | null>(null)
-  const [isRayBanMode, setIsRayBanMode] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
 
   const INFERENCE_BACKEND_URL = "http://localhost:8000"
@@ -44,7 +42,7 @@ export default function WebcamStream() {
   const { detectedFaces, isLoading: isFaceDetectionLoading, error: faceDetectionError } = useFaceDetection(
     videoRef.current,
     {
-      enabled: isStreaming && isVideoReady && !isRayBanMode,
+      enabled: isStreaming && isVideoReady,
       minDetectionConfidence: 0.5,
       targetFps: 20,
       useWorker: true,
@@ -265,8 +263,6 @@ export default function WebcamStream() {
     setIsStreaming(false)
     setIsVideoReady(false)
     setIsConnected(false)
-    setIsRayBanMode(false)
-    setIsRayBanMode(false)
     setIsMuted(false)
     setActiveSpeaker(null)
   }
@@ -333,59 +329,50 @@ export default function WebcamStream() {
         muted
         className={cn(
           "absolute inset-0 h-full w-full object-cover transition-all duration-300",
-          isRayBanMode ? "scale-[1.08] blur-[13px]" : "scale-100"
+          "scale-100"
         )}
         style={{ transform: 'scaleX(-1)' }}
       />
 
       {/* Real-time Person Context Card */}
-      {/* Real-time Person Context Card */}
-      {!isRayBanMode && (
-        <PersonContextCard
-          speakerId={activeSpeaker?.person_id || null}
-          speakerName={activeSpeaker?.name || null}
-        />
+      <PersonContextCard
+        speakerId={activeSpeaker?.person_id || null}
+        speakerName={activeSpeaker?.name || null}
+      />
+
+      <div ref={overlayRef} className="absolute inset-0 pointer-events-none">
+        {faceNotifications.map((notification) => {
+          const person = facePersonData.get(notification!.face.id)
+          return (
+            <FaceNotification
+              key={notification!.face.id}
+              faceId={notification!.face.id}
+              left={notification!.position.left}
+              top={notification!.position.top}
+              confidence={notification!.face.confidence}
+              name={person?.name}
+              description={person?.description}
+              relationship={person?.relationship}
+            />
+          )
+        })}
+      </div>
+
+      <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-2 bg-black/60 backdrop-blur-sm rounded-full">
+        <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'} ${isConnected ? 'animate-pulse' : ''}`} />
+        <span className="text-xs text-white/80">{isConnected ? 'Connected (WebRTC)' : 'Disconnected'}</span>
+      </div>
+
+      {isFaceDetectionLoading && (
+        <div className="absolute top-4 left-4 px-3 py-2 bg-black/60 backdrop-blur-sm rounded-full">
+          <span className="text-xs text-white/80">Loading face detection...</span>
+        </div>
       )}
-
-      {!isRayBanMode && (
-        <>
-          <div ref={overlayRef} className="absolute inset-0 pointer-events-none">
-            {faceNotifications.map((notification) => {
-              const person = facePersonData.get(notification!.face.id)
-              return (
-                <FaceNotification
-                  key={notification!.face.id}
-                  faceId={notification!.face.id}
-                  left={notification!.position.left}
-                  top={notification!.position.top}
-                  confidence={notification!.face.confidence}
-                  name={person?.name}
-                  description={person?.description}
-                  relationship={person?.relationship}
-                />
-              )
-            })}
-          </div>
-
-          <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-2 bg-black/60 backdrop-blur-sm rounded-full">
-            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'} ${isConnected ? 'animate-pulse' : ''}`} />
-            <span className="text-xs text-white/80">{isConnected ? 'Connected (WebRTC)' : 'Disconnected'}</span>
-          </div>
-
-          {isFaceDetectionLoading && (
-            <div className="absolute top-4 left-4 px-3 py-2 bg-black/60 backdrop-blur-sm rounded-full">
-              <span className="text-xs text-white/80">Loading face detection...</span>
-            </div>
-          )}
-          {faceDetectionError && (
-            <div className="absolute top-4 left-4 px-3 py-2 bg-red-500/60 backdrop-blur-sm rounded-full">
-              <span className="text-xs text-white/80">Face detection error</span>
-            </div>
-          )}
-        </>
+      {faceDetectionError && (
+        <div className="absolute top-4 left-4 px-3 py-2 bg-red-500/60 backdrop-blur-sm rounded-full">
+          <span className="text-xs text-white/80">Face detection error</span>
+        </div>
       )}
-
-      <RayBanOverlay stream={streamRef.current} videoRef={videoRef} visible={isRayBanMode} />
 
       <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center px-6 py-4 bg-gradient-to-t from-black/80 to-transparent">
         <div className="flex flex-wrap items-center gap-3">
@@ -410,15 +397,6 @@ export default function WebcamStream() {
             {isStreaming ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
           </Button>
           <span className="text-sm text-white/80">{isStreaming ? "Stop Video" : "Start Video"}</span>
-
-          <Button
-            variant={isRayBanMode ? "default" : "secondary"}
-            className="rounded-full px-4"
-            disabled={!isStreaming}
-            onClick={() => setIsRayBanMode((prev) => !prev)}
-          >
-            {isRayBanMode ? "Exit Ray-Ban Mode" : "Enter Ray-Ban Mode"}
-          </Button>
         </div>
       </div>
     </div>

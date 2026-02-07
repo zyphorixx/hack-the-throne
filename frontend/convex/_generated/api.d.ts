@@ -9,6 +9,7 @@
  */
 
 import type * as context from "../context.js";
+import type * as fix_name from "../fix_name.js";
 import type * as reset from "../reset.js";
 import type * as speakers from "../speakers.js";
 
@@ -20,6 +21,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   context: typeof context;
+  fix_name: typeof fix_name;
   reset: typeof reset;
   speakers: typeof speakers;
 }>;
