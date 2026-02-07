@@ -1,4 +1,4 @@
-"""Main inference service for AR glasses - handles two event types."""
+"""Main inference service - handles two event types."""
 
 import asyncio
 import json
@@ -12,9 +12,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 
 from database import create_person, get_person_by_id, update_person_context
-from fireworks_client import (
+from llm_client import (
     aggregate_conversation_context,
-    generate_ar_description,
+    generate_description,
     infer_new_person_details,
 )
 from models import ConversationEvent, InferenceResult
@@ -22,7 +22,7 @@ from models import ConversationEvent, InferenceResult
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("inference_service")
 
-app = FastAPI(title="Inference Service - AR Glasses")
+app = FastAPI(title="Inference Service")
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,7 +53,7 @@ def safe_get_person(person_id: str) -> Optional[dict]:
 
 def handle_person_detected(event: ConversationEvent) -> InferenceResult:
     """
-    Handle PERSON_DETECTED event - return AR display information from MongoDB.
+    Handle PERSON_DETECTED event - return display information from MongoDB.
     """
     # Query MongoDB for person data
     person_doc = safe_get_person(event.person_id)
@@ -101,7 +101,7 @@ async def handle_conversation_end(event: ConversationEvent) -> None:
     1. Existing person: Update their context and description
     2. New person: Infer their details from conversation and create entry
 
-    Uses Fireworks.ai models for both scenarios.
+    Uses Groq LLM models for both scenarios.
     """
     if not event.conversation:
         logger.warning(f"CONVERSATION_END event for {event.person_id} has no conversation data")
@@ -116,7 +116,7 @@ async def handle_conversation_end(event: ConversationEvent) -> None:
         logger.info(f"Analyzing first conversation ({len(event.conversation)} utterances) to infer details...")
 
         try:
-            # Call Fireworks Model #3: Infer person details
+            # Call LLM Model #3: Infer person details
             inferred_details = await infer_new_person_details(event.conversation)
 
             try:
@@ -152,15 +152,15 @@ async def handle_conversation_end(event: ConversationEvent) -> None:
     logger.info(f"Conversation: {len(event.conversation)} utterances")
 
     try:
-        # Call Fireworks Model #1: Aggregate conversation context
+        # Call LLM Model #1: Aggregate conversation context
         updated_context = await aggregate_conversation_context(
             person_name=person_doc["name"],
             current_context=person_doc["aggregated_context"],
             new_conversation=event.conversation,
         )
 
-        # Call Fireworks Model #2: Generate AR description
-        new_description = await generate_ar_description(
+        # Call LLM Model #2: Generate description
+        new_description = await generate_description(
             person_name=person_doc["name"],
             relationship=person_doc["relationship"],
             aggregated_context=updated_context,
@@ -188,7 +188,7 @@ async def handle_conversation_end(event: ConversationEvent) -> None:
             logger.error(f"Failed to update MongoDB for person {event.person_id}")
 
     except Exception as e:
-        logger.error(f"Error processing conversation with Fireworks.ai: {e}")
+        logger.error(f"Error processing conversation with LLM: {e}")
         logger.error(f"Conversation will not be stored for {event.person_id}")
 
 
@@ -222,7 +222,7 @@ async def consume_metadata_stream():
                                 # Route to appropriate handler based on event type
                                 if event.event_type == "PERSON_DETECTED":
                                     result = handle_person_detected(event)
-                                    # Put result in queue for streaming to AR glasses
+                                    # Put result in queue for streaming to clients
                                     await result_queue.put(result)
 
                                 elif event.event_type == "CONVERSATION_END":
@@ -270,7 +270,7 @@ async def generate_inference_results() -> AsyncGenerator[dict, None]:
 @app.on_event("startup")
 async def startup_event():
     """Start background tasks on application startup."""
-    logger.info("Starting inference service for AR glasses...")
+    logger.info("Starting inference service...")
     asyncio.create_task(consume_metadata_stream())
 
 
@@ -296,7 +296,7 @@ async def root():
     return {
         "service": "inference_service",
         "version": "0.3.0",
-        "focus": "ar_glasses_two_event_types",
+        "focus": "two_event_types",
         "endpoints": {
             "inference_stream": "/stream/inference",
             "health": "/health"
