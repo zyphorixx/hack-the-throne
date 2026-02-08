@@ -69,6 +69,10 @@ video_pipeline = get_video_pipeline(convex_service=convex_service)
 # Maps session_id -> {"speaker_id": str, "has_face": bool, "pending_face": List[float]}
 session_states: dict[str, dict] = {}
 
+# Global state for latest identified speaker (from audio)
+# Used to associate faces with speakers in single-user context
+latest_speaker_info: dict = {"id": None, "name": None, "ts": 0}
+
 class SDPModel(BaseModel):
     sdp: str
     type: str
@@ -268,6 +272,17 @@ If no name is mentioned, return "Unknown"."""},
             try:
                 await conversation_bus.publish(event)
                 logger.info("Published CONVERSATION_END for %s (session=%s)", final_name, session_id)
+                
+                # Update global active speaker state for video correlation
+                if speaker_id:
+                    global latest_speaker_info
+                    latest_speaker_info = {
+                        "id": speaker_id,
+                        "name": final_name,
+                        "ts": time.time()
+                    }
+                    logger.info("Updated active speaker: %s (%s)", final_name, speaker_id)
+
             except Exception as e:
                 logger.warning("Failed to publish conversation event: %s", e)
             
@@ -392,9 +407,27 @@ async def offer(session: SDPModel) -> SDPModel:
                                         )
                                         last_face_id = speaker_id
                                 else:
-                                    # Unknown face - could be associated with current audio speaker
-                                    logger.debug("Unknown face detected")
-                                    last_face_id = None
+                                    # Unknown face - check if we can associate with active audio speaker
+                                    global latest_speaker_info
+                                    now = time.time()
+                                    last_active_ts = latest_speaker_info.get("ts", 0)
+                                    
+                                    # If someone spoke in the last 15 seconds
+                                    if now - last_active_ts < 15.0 and latest_speaker_info.get("id"):
+                                        active_id = latest_speaker_info["id"]
+                                        active_name = latest_speaker_info["name"]
+                                        
+                                        logger.info("Associating unknown face with active speaker: %s", active_name)
+                                        success = await video_pipeline.update_speaker_face(
+                                            active_id, 
+                                            face.embedding
+                                        )
+                                        if success:
+                                            logger.info("✓ Learned face for %s!", active_name)
+                                            last_face_id = active_id
+                                    else:
+                                        logger.debug("Unknown face detected")
+                                        last_face_id = None
                         except Exception as exc:
                             logger.debug("Video frame processing error: %s", exc)
                             continue
