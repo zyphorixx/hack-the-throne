@@ -13,7 +13,7 @@ export default function PersonContextCard({ speakerId, speakerName }: PersonCont
     if (!speakerId) {
         if (speakerName && speakerName !== "Unknown") {
             return (
-                <div className="absolute top-6 right-6 w-80 bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-2xl animate-in fade-in slide-in-from-right-4">
+                <div className="absolute bottom-24 right-6 w-80 bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-2xl animate-in fade-in slide-in-from-right-4">
                     <div className="flex items-center gap-3 mb-2">
                         <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center border border-indigo-500/30">
                             <User className="w-5 h-5 text-indigo-300" />
@@ -33,7 +33,7 @@ export default function PersonContextCard({ speakerId, speakerName }: PersonCont
     if (!person) return null;
 
     return (
-        <div className="absolute top-6 right-6 w-80 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-5 shadow-2xl animate-in fade-in slide-in-from-right-4 z-50 transition-all duration-300">
+        <div className="absolute bottom-24 right-6 w-80 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-5 shadow-2xl animate-in fade-in slide-in-from-right-4 z-50 transition-all duration-300">
             {/* Header Profile */}
             <div className="flex items-start gap-4 mb-4">
                 <div className="relative">
